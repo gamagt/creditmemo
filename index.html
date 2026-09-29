@@ -2201,13 +2201,19 @@ function startCreditMemo(MASTER) {
 
 // ---------- master data loader ----------
 // The item and store lists live in items.json and stores.json next to
-// this page, so they can be refreshed from SharePoint without touching
-// the page itself. Each successful load is also saved on the tablet, so
-// a driver with weak signal still gets autofill from the last good copy.
+// this page, and are refreshed nightly from SQL Server without touching
+// the page itself. Each successful load is also kept in the browser's file
+// cache (not localStorage, which is saved for memo history and drafts), so a
+// driver with weak signal still gets autofill from the last good copy.
 (function () {
   "use strict";
-  var MASTER_CACHE_KEY = "gama_credit_memo_master_v1";
+  var FILES = ["items.json", "stores.json"];
+  var CACHE_NAME = "gama-credit-memo-lists-v1";
+  var OLD_LOCALSTORAGE_KEY = "gama_credit_memo_master_v1";
   var noticeEl = document.getElementById("dataNotice");
+
+  // An earlier version kept the lists in localStorage; free that space for memo history.
+  try { localStorage.removeItem(OLD_LOCALSTORAGE_KEY); } catch (e) { /* ignore */ }
 
   function showNotice(text, kind) {
     if (!noticeEl) return;
@@ -2218,50 +2224,78 @@ function startCreditMemo(MASTER) {
     if (noticeEl) noticeEl.className = "data-notice";
   }
 
-  function fetchJson(url, timeoutMs) {
-    var ctrl = (typeof AbortController === "function") ? new AbortController() : null;
-    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
-    // "no-cache" makes the browser check GitHub for a newer copy every
-    // time, so updated lists show up on the next page load.
-    return fetch(url, { cache: "no-cache", signal: ctrl ? ctrl.signal : undefined })
-      .then(function (res) {
-        if (timer) clearTimeout(timer);
-        if (!res.ok) throw new Error(url + " returned " + res.status);
-        return res.json();
-      }, function (err) {
-        if (timer) clearTimeout(timer);
-        throw err;
-      });
+  function openCache() {
+    if (typeof caches === "undefined") return Promise.resolve(null);
+    return caches.open(CACHE_NAME).catch(function () { return null; });
   }
 
-  function readCache() {
-    try {
-      var c = JSON.parse(localStorage.getItem(MASTER_CACHE_KEY) || "null");
-      if (c && Array.isArray(c.items) && Array.isArray(c.stores)) return c;
-    } catch (e) { /* no usable cache */ }
-    return null;
+  function fetchText(url, timeoutMs) {
+    var ctrl = (typeof AbortController === "function") ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
+    // "no-cache" makes the browser check GitHub for a newer copy every time;
+    // an unchanged file comes back as a quick "not modified" reply.
+    return fetch(url, { cache: "no-cache", signal: ctrl ? ctrl.signal : undefined })
+      .then(function (res) {
+        if (!res.ok) throw new Error(url + " returned " + res.status);
+        return res.text();
+      })
+      .then(function (text) { if (timer) clearTimeout(timer); return text; },
+            function (err) { if (timer) clearTimeout(timer); throw err; });
+  }
+
+  function parseLists(texts) {
+    var items = JSON.parse(texts[0]), stores = JSON.parse(texts[1]);
+    if (!Array.isArray(items) || !Array.isArray(stores)) throw new Error("Unexpected data format");
+    return { items: items, stores: stores };
+  }
+
+  function readCached(cache) {
+    if (!cache) return Promise.resolve(null);
+    return Promise.all(FILES.map(function (f) { return cache.match(f); }))
+      .then(function (resps) {
+        if (!resps[0] || !resps[1]) return null;
+        var savedAt = Number(resps[0].headers.get("X-Saved-At")) || 0;
+        return Promise.all(resps.map(function (r) { return r.text(); }))
+          .then(function (texts) { var d = parseLists(texts); d.savedAt = savedAt; return d; });
+      })
+      .catch(function () { return null; });
+  }
+
+  function writeCached(cache, texts) {
+    if (!cache) return;
+    var now = String(Date.now());
+    FILES.forEach(function (f, i) {
+      cache.put(f, new Response(texts[i], {
+        headers: { "Content-Type": "application/json", "X-Saved-At": now }
+      })).catch(function () { /* storage full or blocked: page still works */ });
+    });
   }
 
   function loadMasterData() {
     showNotice("Loading item and store lists\u2026", "loading");
-    return Promise.all([fetchJson("items.json", 10000), fetchJson("stores.json", 10000)])
-      .then(function (r) {
-        if (!Array.isArray(r[0]) || !Array.isArray(r[1])) throw new Error("Unexpected data format");
-        var data = { items: r[0], stores: r[1], savedAt: Date.now() };
-        try { localStorage.setItem(MASTER_CACHE_KEY, JSON.stringify(data)); } catch (e) { /* storage full or blocked */ }
-        hideNotice();
-        return data;
-      })
-      .catch(function () {
-        var cached = readCache();
-        if (cached) {
-          var when = cached.savedAt ? new Date(cached.savedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "an earlier visit";
-          showNotice("Couldn\u2019t reach the latest item and store lists, so autofill is using the copy saved on this tablet from " + when + ". Reload once you have signal to get the newest lists.", "warn");
-          return cached;
-        }
-        showNotice("Item and store lists didn\u2019t load, so autofill is off. You can still type every field by hand, or reload once you have signal.", "warn");
-        return { items: [], stores: [] };
+    return openCache().then(function (cache) {
+      return readCached(cache).then(function (cached) {
+        // With a saved copy on hand, don't keep a driver waiting on a weak
+        // signal; without one, give the first download more time.
+        var timeoutMs = cached ? 10000 : 30000;
+        return Promise.all(FILES.map(function (f) { return fetchText(f, timeoutMs); }))
+          .then(function (texts) {
+            var data = parseLists(texts);
+            writeCached(cache, texts);
+            hideNotice();
+            return data;
+          })
+          .catch(function () {
+            if (cached) {
+              var when = cached.savedAt ? new Date(cached.savedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "an earlier visit";
+              showNotice("Couldn\u2019t reach the latest item and store lists, so autofill is using the copy saved on this tablet from " + when + ". Reload once you have signal to get the newest lists.", "warn");
+              return cached;
+            }
+            showNotice("Item and store lists didn\u2019t load, so autofill is off. You can still type every field by hand, or reload once you have signal.", "warn");
+            return { items: [], stores: [] };
+          });
       });
+    });
   }
 
   loadMasterData().then(startCreditMemo);
