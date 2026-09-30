@@ -203,6 +203,7 @@
     outline-offset: 1px;
     border-color: var(--focus-ring);
   }
+  .field textarea { resize: vertical; min-height: 84px; line-height: 1.45; }
   .field.invalid input, .field.invalid select { border-color: var(--danger); background: var(--danger-soft); }
   .field .hint { font-size: 10.5px; color: var(--muted); }
 
@@ -570,6 +571,7 @@
     #printMemo .totalRow { display: flex; justify-content: flex-end; align-items: baseline; gap: 10px; margin: 6px 0 10px; }
     #printMemo .totalRow .lbl { font-size: 11px; color: #495a70; font-weight: 600; }
     #printMemo .totalRow .val { font-size: 18px; color: #c0362b; font-weight: 700; }
+    #printMemo .comments { font-size: 11px; color: #16202f; white-space: pre-wrap; margin-bottom: 6px; }
     #printMemo .sigImg { max-width: 60mm; max-height: 22mm; display: block; margin: 4px 0; }
     #printMemo .sigLine { border-top: 1px solid #bec7d6; width: 70mm; margin-top: 16px; padding-top: 3px; font-size: 8.5px; color: #7c8ba0; }
     #printMemo .genAt { font-size: 8px; color: #7c8ba0; margin-top: 14px; }
@@ -703,7 +705,15 @@
     </section>
 
     <section class="card">
-      <h2><span class="n">4</span>Check-In &amp; Sign-Off</h2>
+      <h2><span class="n">4</span>Comments</h2>
+      <div class="field" id="f-comments">
+        <label for="comments">Notes about this credit (optional)</label>
+        <textarea id="comments" rows="3" maxlength="1000"></textarea>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">5</span>Check-In &amp; Sign-Off</h2>
       <div class="grid grid-3" style="margin-bottom:12px;">
         <div class="field" id="f-itemsCheckedIn">
           <label>Total items checked in</label>
@@ -1447,6 +1457,7 @@ function startCreditMemo(MASTER) {
       dateIssued: document.getElementById("dateIssued").value,
       items: rows,
       totalCredit: updateTotal(),
+      comments: document.getElementById("comments").value.trim(),
       itemsCheckedIn: document.getElementById("itemsCheckedIn").value.trim(),
       pickedUpBy: document.getElementById("pickedUpBy").value.trim(),
       driverName: document.getElementById("driverName").value.trim(),
@@ -1509,6 +1520,11 @@ function startCreditMemo(MASTER) {
     lines.push("");
     lines.push("TOTAL CREDIT: " + fmtMoney(data.totalCredit));
     lines.push("");
+    if (data.comments) {
+      lines.push("COMMENTS");
+      lines.push(data.comments);
+      lines.push("");
+    }
     lines.push("CHECK-IN / SIGN-OFF");
     lines.push("Total items checked in: " + (data.itemsCheckedIn || "—"));
     lines.push("Mdse. picked up by: " + (data.pickedUpBy || "—"));
@@ -1661,6 +1677,29 @@ function startCreditMemo(MASTER) {
     rule(y);
     y += 8;
 
+    if (data.comments) {
+      if (y + 14 > pageH - 15) { doc.addPage(); y = M; }
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(124, 139, 160);
+      doc.text("COMMENTS", M, y);
+      y += 5;
+      doc.setFontSize(10);
+      doc.setTextColor(22, 32, 47);
+      var commentLines = doc.splitTextToSize(data.comments, contentW); // measured at the 10pt size it's drawn in
+      commentLines.forEach(function (line) {
+        if (y > pageH - 15) { doc.addPage(); y = M + 4; }
+        doc.text(line, M, y);
+        y += 4.6;
+      });
+      y += 3;
+      rule(y);
+      y += 8;
+    }
+
+    // Keep the check-in fields and the signature on the same page.
+    if (y + 70 > pageH - 15) { doc.addPage(); y = M; }
+
     var half = contentW / 2;
     field("Total Items Checked In", data.itemsCheckedIn, M, half - 4);
     field("Mdse. Picked Up By", data.pickedUpBy, M + half, half - 4);
@@ -1754,6 +1793,7 @@ function startCreditMemo(MASTER) {
       '<table><thead><tr><th>Qty</th><th>GAMA Code</th><th>Description</th><th>Reason</th><th class="r">Unit Price</th><th class="r">Amount</th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table>' +
       '<div class="totalRow"><span class="lbl">TOTAL CREDIT</span><span class="val">' + esc(fmtMoney(data.totalCredit)) + '</span></div>' +
+      (data.comments ? '<h2>Comments</h2><div class="comments">' + esc(data.comments) + '</div>' : '') +
 
       '<h2>Check-In &amp; Sign-Off</h2>' +
       '<div class="fields">' +
@@ -1871,7 +1911,7 @@ function startCreditMemo(MASTER) {
   var draftSaveTimer = null;
 
   function isDraftWorthSaving(data) {
-    if (data.businessName) return true;
+    if (data.businessName || data.comments) return true;
     return data.items.some(function (it) { return it.code || it.desc || it.qty; });
   }
 
@@ -1922,6 +1962,7 @@ function startCreditMemo(MASTER) {
     setVal("driverName", data.driverName);
     setVal("customerName", data.customerName);
     setVal("approvedBy", data.approvedBy);
+    setVal("comments", data.comments);
 
     itemsList.innerHTML = "";
     var items = (data.items && data.items.length) ? data.items : [];
@@ -1989,6 +2030,7 @@ function startCreditMemo(MASTER) {
     document.getElementById("driverName").value = "";
     document.getElementById("customerName").value = "";
     document.getElementById("approvedBy").value = "";
+    document.getElementById("comments").value = "";
     itemsList.innerHTML = "";
     for (var i = 0; i < 4; i++) addRow();
     updateTotal();
@@ -2068,6 +2110,7 @@ function startCreditMemo(MASTER) {
       driverName: h.driverName || "",
       customerName: "",
       approvedBy: "",
+      comments: "",
       signature: ""
     };
   }
