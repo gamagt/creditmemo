@@ -32,6 +32,12 @@
     --warn: #9a6b00;
     --warn-soft: #fbedc7;
     --warn-line: #d9a441;
+    --tote-del: #1d6b43;
+    --tote-del-soft: #dcf2e5;
+    --tote-del-line: #9fd5b6;
+    --tote-ret: #643b98;
+    --tote-ret-soft: #ece2f9;
+    --tote-ret-line: #c9b3ec;
     --focus-ring: #22539e;
     --shadow: 0 1px 2px rgba(15, 26, 42, 0.07), 0 8px 24px -12px rgba(15, 26, 42, 0.22);
   }
@@ -60,6 +66,12 @@
       --warn: #e0b94a;
       --warn-soft: #3a2f10;
       --warn-line: #6b5320;
+      --tote-del: #8fd8ae;
+      --tote-del-soft: #15322a;
+      --tote-del-line: #2b6249;
+      --tote-ret: #cbb0f3;
+      --tote-ret-soft: #2a2140;
+      --tote-ret-line: #4f3b78;
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px -12px rgba(0, 0, 0, 0.55);
     }
   }
@@ -86,6 +98,12 @@
     --warn: #e0b94a;
     --warn-soft: #3a2f10;
     --warn-line: #6b5320;
+    --tote-del: #8fd8ae;
+    --tote-del-soft: #15322a;
+    --tote-del-line: #2b6249;
+    --tote-ret: #cbb0f3;
+    --tote-ret-soft: #2a2140;
+    --tote-ret-line: #4f3b78;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px -12px rgba(0, 0, 0, 0.55);
   }
 
@@ -285,6 +303,17 @@
   .item-row.tote-row .price,
   .item-row.tote-row .amount-cell { display: none; }
   .item-row.tote-row .field.desc input { background: var(--surface-2); color: var(--ink-soft); }
+  .item-row.tote-delivered .field.desc input { background: var(--tote-del-soft); color: var(--tote-del); border-color: var(--tote-del-line); }
+  .item-row.tote-delivered { --bump: var(--tote-del-line); }
+  .item-row.tote-returned { --bump: var(--tote-ret-line); }
+  @keyframes tote-bump {
+    0% { box-shadow: 0 0 0 0 var(--bump); }
+    25% { box-shadow: 0 0 0 4px var(--bump); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  .item-row.tote-row.tote-bump .f-qty { animation: tote-bump 0.6s ease-out; }
+  @media (prefers-reduced-motion: reduce) { .item-row.tote-row.tote-bump .f-qty { animation: none; } }
+  .item-row.tote-returned .field.desc input { background: var(--tote-ret-soft); color: var(--tote-ret); border-color: var(--tote-ret-line); }
   .field-invalid { border-color: var(--danger) !important; background: var(--danger-soft) !important; }
   .items-subtotals {
     display: flex; flex-wrap: wrap; gap: 4px 18px;
@@ -429,6 +458,8 @@
     border-radius: 8px; padding: 8px 14px; cursor: pointer;
   }
   .btn-add:hover { filter: brightness(0.97); }
+  .btn-add.btn-tote-delivered { color: var(--tote-del); background: var(--tote-del-soft); border-color: var(--tote-del-line); }
+  .btn-add.btn-tote-returned { color: var(--tote-ret); background: var(--tote-ret-soft); border-color: var(--tote-ret-line); }
   .total-row {
     display: flex; justify-content: flex-end; align-items: baseline; gap: 10px;
     margin-top: 14px; padding-top: 14px; border-top: 2px solid var(--ink);
@@ -692,10 +723,12 @@
 
       <div class="items-actions">
         <button type="button" class="btn-add" id="addRow">+ Add item</button>
-        <button type="button" class="btn-add" id="addToteRow">+ Add totes returned</button>
+        <button type="button" class="btn-add btn-tote-delivered" id="addToteDeliveredRow">+ Tote(s) Delivered</button>
+        <button type="button" class="btn-add btn-tote-returned" id="addToteReturnedRow">+ Tote(s) Returned</button>
         <div class="items-subtotals" id="itemsSubtotals">
           <span>Total item qty <b id="totalQtyItems">0</b></span>
-          <span>Total totes <b id="totalQtyTotes">0</b></span>
+          <span>Totes delivered <b id="totalTotesDelivered">0</b></span>
+          <span>Totes returned <b id="totalTotesReturned">0</b></span>
         </div>
         <div class="total-row" style="margin:0; padding:0; border:none;">
           <span class="label">Total credit</span>
@@ -705,15 +738,7 @@
     </section>
 
     <section class="card">
-      <h2><span class="n">4</span>Comments</h2>
-      <div class="field" id="f-comments">
-        <label for="comments">Notes about this credit (optional)</label>
-        <textarea id="comments" rows="3" maxlength="1000"></textarea>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2><span class="n">5</span>Check-In &amp; Sign-Off</h2>
+      <h2><span class="n">4</span>Check-In &amp; Sign-Off</h2>
       <div class="grid grid-3" style="margin-bottom:12px;">
         <div class="field" id="f-itemsCheckedIn">
           <label>Total items checked in</label>
@@ -725,7 +750,7 @@
         </div>
         <div class="field" id="f-driverName">
           <label>Driver name <span class="req">*</span></label>
-          <input type="text" id="driverName">
+          <input type="text" id="driverName" autocomplete="off" placeholder="Pick from the list or type a name">
         </div>
       </div>
       <div class="grid grid-2">
@@ -737,6 +762,10 @@
           <label>Credit approved by</label>
           <input type="text" id="approvedBy">
         </div>
+      </div>
+      <div class="field" id="f-comments" style="margin-top:12px;">
+        <label for="comments">Driver comments</label>
+        <textarea id="comments" rows="3" maxlength="1000" placeholder="Anything the office should know about this pickup — damaged goods, access issues, customer notes, etc."></textarea>
       </div>
       <div class="field" id="f-signature" style="margin-top:14px;">
         <label>Customer signature</label>
@@ -790,6 +819,10 @@
 <script>
 function startCreditMemo(MASTER) {
   "use strict";
+
+  // Names offered in the Driver name list. Names typed on this tablet before
+  // are offered too, and drivers can always type a name that isn't listed.
+  var DRIVERS = [];
 
   var RECIPIENTS = ["sanam@gamaus.com", "accts@gamaus.com", "acctsreceivables@gamaus.com", "james@gamaus.com"];
   var RECIPIENT_LABEL = RECIPIENTS.join(", ");
@@ -1110,14 +1143,31 @@ function startCreditMemo(MASTER) {
     }).join("");
   }
 
+  var TOTE_KINDS = {
+    toteDelivered: { cls: "tote-delivered", desc: "Tote(s) Delivered", label: "Totes delivered" },
+    toteReturned:  { cls: "tote-returned",  desc: "Tote(s) Returned",  label: "Totes returned" }
+  };
+
+  // Which kind of row a saved line item was. Memos saved before totes were
+  // split into delivered/returned only had "Tote(s)", which meant returned.
+  function rowKindOf(it) {
+    if (it.kind && TOTE_KINDS[it.kind]) return it.kind;
+    if (it.desc === "Tote(s) Delivered") return "toteDelivered";
+    if (it.desc === "Tote(s) Returned" || it.desc === "Tote(s)") return "toteReturned";
+    return "";
+  }
+
   function makeRow(kind) {
     rowSeq += 1;
-    var isTote = kind === "tote";
+    if (kind === "tote") kind = "toteReturned";
+    var tote = TOTE_KINDS[kind] || null;
+    var isTote = !!tote;
     var row = document.createElement("div");
-    row.className = isTote ? "item-row tote-row" : "item-row";
+    row.className = isTote ? "item-row tote-row " + tote.cls : "item-row";
+    if (isTote) row.dataset.kind = kind;
     row.dataset.rowId = String(rowSeq);
     row.innerHTML =
-      '<div class="row-num">' + (isTote ? "Totes" : "Item " + rowSeq) + '</div>' +
+      '<div class="row-num">' + (isTote ? tote.label : "Item " + rowSeq) + '</div>' +
       '<div class="field qty"><label>Qty</label><input type="number" min="0" step="1" inputmode="numeric" class="f-qty"></div>' +
       '<div class="field code-cell"><label>GAMA code</label><input type="text" class="f-code"' + (isTote ? '' : ' autocomplete="off"') + '></div>' +
       '<div class="field desc"><label>Description</label><input type="text" class="f-desc"' + (isTote ? ' readonly' : ' autocomplete="off"') + '></div>' +
@@ -1125,8 +1175,13 @@ function startCreditMemo(MASTER) {
       '<div class="field price"><label>Unit price</label><div class="money-input"><span class="money-sign">$</span><input type="number" min="0" step="0.01" inputmode="decimal" class="f-price"></div></div>' +
       '<div class="amount-cell"><label class="amt-label" style="font-size:11px;color:var(--muted);">Amount</label><div class="money-input"><span class="money-sign">$</span><input type="number" min="0" step="0.01" inputmode="decimal" class="f-amount"></div></div>' +
       '<button type="button" class="remove-row" title="Remove item" aria-label="Remove item">×</button>';
-    itemsList.appendChild(row);
-    if (isTote) row.querySelector(".f-desc").value = "Tote(s)";
+    // Keep item lines first and the tote lines at the bottom (Delivered, then Returned).
+    var firstTote = itemsList.querySelector(".tote-row");
+    var returnedRow = itemsList.querySelector(".tote-returned");
+    if (!isTote && firstTote) itemsList.insertBefore(row, firstTote);
+    else if (kind === "toteDelivered" && returnedRow) itemsList.insertBefore(row, returnedRow);
+    else itemsList.appendChild(row);
+    if (isTote) row.querySelector(".f-desc").value = tote.desc;
 
     var qty = row.querySelector(".f-qty");
     var code = row.querySelector(".f-code");
@@ -1254,21 +1309,35 @@ function startCreditMemo(MASTER) {
   }
 
   function addRow() { makeRow(); }
-  function addToteRow() { makeRow("tote"); }
   document.getElementById("addRow").addEventListener("click", addRow);
-  document.getElementById("addToteRow").addEventListener("click", addToteRow);
+  // Each tote button keeps a single line for its type: the first tap adds the
+  // line with qty 1, and every tap after that adds 1 to the same line.
+  function addTote(kind) {
+    var row = itemsList.querySelector('.tote-row[data-kind="' + kind + '"]') || makeRow(kind);
+    var qtyEl = row.querySelector(".f-qty");
+    var n = parseInt(qtyEl.value, 10);
+    qtyEl.value = String((isFinite(n) && n > 0 ? n : 0) + 1);
+    qtyEl.dispatchEvent(new Event("input", { bubbles: true })); // updates counts and saves the draft
+    row.classList.remove("tote-bump");
+    void row.offsetWidth; // restart the highlight if tapped quickly
+    row.classList.add("tote-bump");
+  }
+  document.getElementById("addToteDeliveredRow").addEventListener("click", function () { addTote("toteDelivered"); });
+  document.getElementById("addToteReturnedRow").addEventListener("click", function () { addTote("toteReturned"); });
 
   function updateTotal() {
     var rows = itemsList.querySelectorAll(".item-row");
     var total = 0;
     var qtyItems = 0;
-    var qtyTotes = 0;
+    var qtyDelivered = 0;
+    var qtyReturned = 0;
     rows.forEach(function (r) {
       var v = parseFloat(r.querySelector(".f-amount").value);
       if (isFinite(v)) total += v;
       var q = parseFloat(r.querySelector(".f-qty").value);
       if (isFinite(q)) {
-        if (r.classList.contains("tote-row")) qtyTotes += q;
+        if (r.dataset.kind === "toteDelivered") qtyDelivered += q;
+        else if (r.dataset.kind === "toteReturned") qtyReturned += q;
         else qtyItems += q;
       }
     });
@@ -1277,9 +1346,9 @@ function startCreditMemo(MASTER) {
     document.getElementById("topTotal").textContent = s;
     document.getElementById("barTotal").textContent = s;
     var totalQtyItemsEl = document.getElementById("totalQtyItems");
-    var totalQtyTotesEl = document.getElementById("totalQtyTotes");
     if (totalQtyItemsEl) totalQtyItemsEl.textContent = qtyItems;
-    if (totalQtyTotesEl) totalQtyTotesEl.textContent = qtyTotes;
+    document.getElementById("totalTotesDelivered").textContent = qtyDelivered;
+    document.getElementById("totalTotesReturned").textContent = qtyReturned;
     var itemsCheckedInEl = document.getElementById("itemsCheckedIn");
     if (itemsCheckedInEl && itemsCheckedInEl.dataset.dirty !== "1") {
       itemsCheckedInEl.value = qtyItems ? String(qtyItems) : "";
@@ -1442,7 +1511,9 @@ function startCreditMemo(MASTER) {
       var amount = r.querySelector(".f-amount").value.trim();
       if (qty || code || desc || price || amount) {
         var isTote = r.classList.contains("tote-row");
-        rows.push({ qty: qty, code: code, desc: desc, reason: reason, price: price, amount: amount, notFound: isTote ? false : itemNotFound(code, desc) });
+        var rowData = { qty: qty, code: code, desc: desc, reason: reason, price: price, amount: amount, notFound: isTote ? false : itemNotFound(code, desc) };
+        if (isTote) rowData.kind = r.dataset.kind;
+        rows.push(rowData);
       }
     });
     return {
@@ -1520,17 +1591,17 @@ function startCreditMemo(MASTER) {
     lines.push("");
     lines.push("TOTAL CREDIT: " + fmtMoney(data.totalCredit));
     lines.push("");
-    if (data.comments) {
-      lines.push("COMMENTS");
-      lines.push(data.comments);
-      lines.push("");
-    }
     lines.push("CHECK-IN / SIGN-OFF");
     lines.push("Total items checked in: " + (data.itemsCheckedIn || "—"));
     lines.push("Mdse. picked up by: " + (data.pickedUpBy || "—"));
     lines.push("Driver name: " + (data.driverName || "—"));
     lines.push("Customer name: " + (data.customerName || "—"));
     lines.push("Credit approved by: " + (data.approvedBy || "—"));
+    if (data.comments) {
+      lines.push("");
+      lines.push("DRIVER COMMENTS");
+      lines.push(data.comments);
+    }
     return lines.join("\n");
   }
 
@@ -1677,28 +1748,19 @@ function startCreditMemo(MASTER) {
     rule(y);
     y += 8;
 
+    // Driver comments sit inside the check-in section, above the signature.
+    var commentLines = [];
     if (data.comments) {
-      if (y + 14 > pageH - 15) { doc.addPage(); y = M; }
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(124, 139, 160);
-      doc.text("COMMENTS", M, y);
-      y += 5;
       doc.setFontSize(10);
-      doc.setTextColor(22, 32, 47);
-      var commentLines = doc.splitTextToSize(data.comments, contentW); // measured at the 10pt size it's drawn in
-      commentLines.forEach(function (line) {
-        if (y > pageH - 15) { doc.addPage(); y = M + 4; }
-        doc.text(line, M, y);
-        y += 4.6;
-      });
-      y += 3;
-      rule(y);
-      y += 8;
+      commentLines = doc.splitTextToSize(data.comments, contentW);
     }
-
-    // Keep the check-in fields and the signature on the same page.
-    if (y + 70 > pageH - 15) { doc.addPage(); y = M; }
+    var commentsH = commentLines.length ? 5 + commentLines.length * 4.6 + 6 : 0;
+    var signOffH = 38 + commentsH + 32;
+    // Keep the whole sign-off on one page when it fits on one; a very long
+    // comment flows across pages instead.
+    if (y + signOffH > pageH - 15 && signOffH <= pageH - 15 - M) { doc.addPage(); y = M; }
+    else if (y + 38 > pageH - 15) { doc.addPage(); y = M; }
 
     var half = contentW / 2;
     field("Total Items Checked In", data.itemsCheckedIn, M, half - 4);
@@ -1709,6 +1771,22 @@ function startCreditMemo(MASTER) {
     y += 12;
     field("Credit Approved By", data.approvedBy, M, half - 4);
     y += 14;
+
+    if (commentLines.length) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(124, 139, 160);
+      doc.text("DRIVER COMMENTS", M, y);
+      y += 5;
+      doc.setFontSize(10);
+      doc.setTextColor(22, 32, 47);
+      commentLines.forEach(function (line) {
+        if (y > pageH - 15) { doc.addPage(); y = M + 4; }
+        doc.text(line, M, y);
+        y += 4.6;
+      });
+      y += 6;
+    }
 
     if (y + 32 > pageH - 15) { doc.addPage(); y = M; }
     doc.setFont("helvetica", "normal");
@@ -1793,7 +1871,6 @@ function startCreditMemo(MASTER) {
       '<table><thead><tr><th>Qty</th><th>GAMA Code</th><th>Description</th><th>Reason</th><th class="r">Unit Price</th><th class="r">Amount</th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table>' +
       '<div class="totalRow"><span class="lbl">TOTAL CREDIT</span><span class="val">' + esc(fmtMoney(data.totalCredit)) + '</span></div>' +
-      (data.comments ? '<h2>Comments</h2><div class="comments">' + esc(data.comments) + '</div>' : '') +
 
       '<h2>Check-In &amp; Sign-Off</h2>' +
       '<div class="fields">' +
@@ -1803,6 +1880,7 @@ function startCreditMemo(MASTER) {
         '<div><div class="lbl">Customer Name</div><div class="val">' + esc(data.customerName || "—") + '</div></div>' +
         '<div><div class="lbl">Credit Approved By</div><div class="val">' + esc(data.approvedBy || "—") + '</div></div>' +
       '</div>' +
+      (data.comments ? '<div class="lbl" style="margin-top:8px;">Driver Comments</div><div class="comments">' + esc(data.comments) + '</div>' : '') +
       '<div class="lbl" style="margin-top:10px;">Customer Signature</div>' +
       sigHtml +
 
@@ -1970,11 +2048,17 @@ function startCreditMemo(MASTER) {
       for (var i = 0; i < 4; i++) addRow();
     } else {
       items.forEach(function (it) {
-        addRow();
-        var row = itemsList.lastElementChild;
+        var kind = rowKindOf(it);
+        var existing = kind && itemsList.querySelector('.tote-row[data-kind="' + kind + '"]');
+        if (existing) {
+          var eq = existing.querySelector(".f-qty");
+          eq.value = String((parseFloat(eq.value) || 0) + (parseFloat(it.qty) || 0));
+          return;
+        }
+        var row = makeRow(kind);
         row.querySelector(".f-qty").value = it.qty || "";
         row.querySelector(".f-code").value = it.code || "";
-        row.querySelector(".f-desc").value = it.desc || "";
+        if (!row.classList.contains("tote-row")) row.querySelector(".f-desc").value = it.desc || "";
         if (it.reason) row.querySelector(".f-reason").value = it.reason;
         row.querySelector(".f-price").value = it.price || "";
         if (it.amount) {
@@ -2235,6 +2319,29 @@ function startCreditMemo(MASTER) {
     document.getElementById("successCard").classList.add("show");
     document.querySelector(".actionbar").style.display = "none";
     window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  function driverNameOptions() {
+    var seen = {}, names = [];
+    function add(n) {
+      n = String(n || "").trim();
+      if (!n || seen[n.toLowerCase()]) return;
+      seen[n.toLowerCase()] = true;
+      names.push(n);
+    }
+    DRIVERS.forEach(add);
+    loadHistory().forEach(function (h) { add((h.data && h.data.driverName) || h.driverName); });
+    return names.sort(function (a, b) { return a.localeCompare(b); });
+  }
+  attachPicker(document.getElementById("driverName"), document.getElementById("f-driverName"), function (q) {
+    var list = driverNameOptions().map(function (n) { return [n]; });
+    return pickerSearch(list, 0, q, 50).map(function (r) {
+      return { data: r[0], html: '<span class="picker-main">' + highlightMatch(esc(r[0]), q) + '</span>' };
+    });
+  }, function (name) {
+    document.getElementById("driverName").value = name;
+    clearFieldInvalid("driverName");
+    queueDraftSave();
   });
 
   renderHistory();
