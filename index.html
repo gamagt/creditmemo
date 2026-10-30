@@ -206,7 +206,7 @@
 
   .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .field label { font-size: 11.5px; color: var(--muted); letter-spacing: 0.02em; }
-  .field label .req { color: var(--danger); }
+  .field label .req, .items-head .req { color: var(--danger); }
   .field input, .field select, .field textarea {
     font: inherit;
     color: var(--ink);
@@ -717,7 +717,7 @@
       <div style="height:14px;"></div>
 
       <div class="items-head">
-        <div>Qty</div><div>GAMA Code</div><div>Description</div><div>Reason</div><div>Unit Price</div><div style="text-align:right;" title="Auto-calculated as Qty × Unit Price — tap to override">Amount</div><div></div>
+        <div>Qty <span class="req">*</span></div><div>GAMA Code <span class="req">*</span></div><div>Description</div><div>Reason <span class="req">*</span></div><div>Unit Price</div><div style="text-align:right;" title="Auto-calculated as Qty × Unit Price — tap to override">Amount</div><div></div>
       </div>
       <div id="itemsList"></div>
 
@@ -966,6 +966,7 @@ function startCreditMemo(MASTER) {
           e.preventDefault();
           onPick(item.data);
           panel.classList.remove("show");
+          recheckLineItemErrors(inputEl.closest(".item-row"));
         });
         panel.appendChild(row);
       });
@@ -1185,10 +1186,10 @@ function startCreditMemo(MASTER) {
     row.dataset.rowId = String(rowSeq);
     row.innerHTML =
       '<div class="row-num">' + (isTote ? tote.label : "Item " + rowSeq) + '</div>' +
-      '<div class="field qty"><label>Qty</label><input type="number" min="0" step="1" inputmode="numeric" class="f-qty"></div>' +
-      '<div class="field code-cell"><label>GAMA code</label><input type="text" class="f-code"' + (isTote ? '' : ' autocomplete="off"') + '></div>' +
+      '<div class="field qty"><label>Qty <span class="req">*</span></label><input type="number" min="0" step="1" inputmode="numeric" class="f-qty"></div>' +
+      '<div class="field code-cell"><label>GAMA code <span class="req">*</span></label><input type="text" class="f-code"' + (isTote ? '' : ' autocomplete="off"') + '></div>' +
       '<div class="field desc"><label>Description</label><input type="text" class="f-desc"' + (isTote ? ' readonly' : ' autocomplete="off"') + '></div>' +
-      '<div class="field reason"><label>Reason</label><select class="f-reason">' + reasonOptionsHtml("") + '</select></div>' +
+      '<div class="field reason"><label>Reason <span class="req">*</span></label><select class="f-reason">' + reasonOptionsHtml("") + '</select></div>' +
       '<div class="field price"><label>Unit price</label><div class="money-input"><span class="money-sign">$</span><input type="number" min="0" step="0.01" inputmode="decimal" class="f-price"></div></div>' +
       '<div class="amount-cell"><label class="amt-label" style="font-size:11px;color:var(--muted);">Amount</label><div class="money-input"><span class="money-sign">$</span><input type="number" min="0" step="0.01" inputmode="decimal" class="f-amount"></div></div>' +
       '<button type="button" class="remove-row" title="Remove item" aria-label="Remove item">×</button>';
@@ -1321,6 +1322,7 @@ function startCreditMemo(MASTER) {
     removeBtn.addEventListener("click", function () {
       row.remove();
       updateTotal();
+      recheckLineItemErrors(itemsList);
     });
     return row;
   }
@@ -1391,6 +1393,10 @@ function startCreditMemo(MASTER) {
     if (field && field.id && field.id.indexOf("f-") === 0) {
       clearFieldInvalid(field.id.slice(2));
     }
+    recheckLineItemErrors(e.target.closest(".item-row"));
+  });
+  document.addEventListener("change", function (e) {
+    recheckLineItemErrors(e.target.closest(".item-row"));
   });
 
   // ---------- signature pad ----------
@@ -1558,9 +1564,49 @@ function startCreditMemo(MASTER) {
   function validate(data) {
     if (!data.businessName) return { msg: "Enter the business name this credit is for.", fields: ["businessName"] };
     if (!data.driverName) return { msg: "Enter the driver name.", fields: ["driverName"] };
-    var hasItem = data.items.some(function (it) { return it.desc && it.qty; });
-    if (!hasItem) return { msg: "Add at least one line item with a quantity and description.", fields: [] };
     return null;
+  }
+
+  // Every line item in use needs a Qty (more than 0), GAMA code and Reason.
+  // Tote lines only have a Qty. Blank lines are ignored. Returns the inputs
+  // that still need filling in.
+  function lineQtyOk(v) { var n = parseFloat(v); return isFinite(n) && n > 0; }
+  function lineFieldOk(el) {
+    if (el.classList.contains("f-qty")) return lineQtyOk(el.value);
+    return el.value.trim() !== "";
+  }
+  function checkLineItems() {
+    var missing = [];
+    itemsList.querySelectorAll(".item-row").forEach(function (r) {
+      var isTote = r.classList.contains("tote-row");
+      var qtyEl = r.querySelector(".f-qty");
+      var codeEl = r.querySelector(".f-code");
+      var reasonEl = r.querySelector(".f-reason");
+      var inUse = isTote || [".f-qty", ".f-code", ".f-desc", ".f-reason", ".f-price", ".f-amount"].some(function (sel) {
+        var el = r.querySelector(sel);
+        return el && el.value.trim() !== "";
+      });
+      if (!inUse) return;
+      if (!lineFieldOk(qtyEl)) missing.push(qtyEl);
+      if (!isTote) {
+        if (!lineFieldOk(codeEl)) missing.push(codeEl);
+        if (!lineFieldOk(reasonEl)) missing.push(reasonEl);
+      }
+    });
+    return missing;
+  }
+
+  // Clears the red outline on line item fields once they're filled in,
+  // whether typed, chosen from a list, or filled by autofill.
+  function recheckLineItemErrors(row) {
+    if (!row) return;
+    row.querySelectorAll(".field.invalid").forEach(function (f) {
+      var el = f.querySelector(".f-qty, .f-code, .f-reason");
+      if (el && lineFieldOk(el)) f.classList.remove("invalid");
+    });
+    if (!document.querySelector(".field.invalid")) {
+      document.getElementById("errorBanner").classList.remove("show");
+    }
   }
 
   function formatDateForSubject(iso) {
@@ -2324,6 +2370,18 @@ function startCreditMemo(MASTER) {
     var problem = validate(data);
     if (problem) {
       showError(problem.msg, problem.fields);
+      return;
+    }
+    var missingLineFields = checkLineItems();
+    if (missingLineFields.length) {
+      missingLineFields.forEach(function (el) { el.closest(".field").classList.add("invalid"); });
+      showError("Every line item needs a Qty, GAMA code and Reason. Fill in the boxes outlined in red.", []);
+      missingLineFields[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    var hasLine = data.items.some(function (it) { return lineQtyOk(it.qty) && (it.code || it.kind); });
+    if (!hasLine) {
+      showError("Add at least one line item.", []);
       return;
     }
     lastConfirmedData = data;
